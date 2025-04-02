@@ -136,7 +136,7 @@ export class PostgresQuotaRepository implements QuotaRepository {
                 [accountId, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]]
             );
 
-            return result.rows.map(row => ({
+            return result.rows.map((row: { account_id: any; date: any; sent: any; failed: any; remaining: any; }) => ({
                 accountId: row.account_id,
                 date: row.date,
                 sent: row.sent,
@@ -155,7 +155,7 @@ export class PostgresQuotaRepository implements QuotaRepository {
                 'SELECT * FROM email_accounts'
             );
 
-            return result.rows.map(row => ({
+            return result.rows.map((row: { id: any; tenant_id: any; user_id: any; provider: any; email: any; credentials: any; quota_settings: any; status: any; }) => ({
                 id: row.id,
                 tenantId: row.tenant_id,
                 userId: row.user_id,

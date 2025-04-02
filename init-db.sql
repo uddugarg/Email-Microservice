@@ -54,7 +54,7 @@ INSERT INTO email_accounts (
   'demo-tenant',
   'user-1',
   'GMAIL',
-  'demo.user1@gmail.com',
+  'udivyy.99@gmail.com',
   '{"accessToken": "", "refreshToken": "", "expiresAt": 0}',
   '{"dailyLimit": 50, "warmupStep": 10, "maxLimit": 500, "currentStage": 1}',
   'INACTIVE'
