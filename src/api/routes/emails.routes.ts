@@ -35,7 +35,6 @@ export function emailsRouter(
 
             // Publish to queue
             await queueAdapter.publish('send-email', event);
-            console.log("published")
             logger.info(`Queued email for sending: ${eventId}`);
 
             res.status(202).json({

@@ -13,7 +13,7 @@
 
 //     async initialize(): Promise<void> {
 //         try {
-//             this.connection = (await amqp.connect(this.url)) as amqp.Connection;
+//             this.connection = await amqp.connect(this.url);
 //             this.channel = await (this.connection as amqp.Connection).createChannel();
 
 //             await this.channel.assertExchange('emails', 'topic', { durable: true });

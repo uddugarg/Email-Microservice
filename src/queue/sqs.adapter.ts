@@ -23,13 +23,22 @@ export class SQSAdapter implements QueueAdapter {
             profile?: string;
         };
     }) {
-        this.sqsClient = new SQSClient({ region: config.region });
+        if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+            throw new Error('AWS credentials are not defined in environment variables');
+        }
+
+        this.sqsClient = new SQSClient({ 
+            region: config.region,
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            }
+        });
         this.queueUrls = config.queueUrls;
     }
 
     async initialize(): Promise<void> {
         try {
-            console.log('inside initialise')
             // Ensure all queues exist
             for (const [topic, url] of Object.entries(this.queueUrls)) {
                 try {
@@ -56,7 +65,6 @@ export class SQSAdapter implements QueueAdapter {
             throw new Error(`Queue for topic ${topic} not configured`);
         }
 
-        console.log(queueUrl, JSON.stringify(message))
         await this.sqsClient.send(new SendMessageCommand({
             QueueUrl: queueUrl,
             MessageBody: JSON.stringify(message)
@@ -64,7 +72,6 @@ export class SQSAdapter implements QueueAdapter {
     }
 
     subscribe(topic: string, handler: (message: any) => Promise<void>): void {
-        console.log('inside subscribe')
         const queueUrl = this.queueUrls[topic];
         if (!queueUrl) {
             throw new Error(`Queue for topic ${topic} not configured`);
