@@ -1,0 +1,51 @@
+{
+  "name": "email-microservice",
+  "version": "1.0.0",
+  "description": "Email microservice with queue-based architecture",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "node dist/main.js",
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn src/main.ts",
+    "processor": "ts-node-dev --respawn src/processor/processor.main.ts",
+    "test": "jest",
+    "test:integration": "jest --config jest.integration.config.js",
+    "test:load": "artillery run load-tests/email-sending.yml",
+    "lint": "eslint 'src/**/*.ts'",
+    "migrate": "node-pg-migrate"
+  },
+  "dependencies": {
+    "@microsoft/microsoft-graph-client": "^3.0.5",
+    "amqplib": "^0.10.3",
+    "aws-sdk": "^2.1373.0",
+    "axios": "^1.4.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "googleapis": "^118.0.0",
+    "node-fetch": "^3.3.1",
+    "nodemailer": "^6.9.2",
+    "pg": "^8.10.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.1",
+    "@types/cors": "^2.8.13",
+    "@types/express": "^4.17.17",
+    "@types/jest": "^29.5.1",
+    "@types/node": "^20.1.0",
+    "@types/nodemailer": "^6.4.7",
+    "@types/pg": "^8.6.6",
+    "@types/uuid": "^9.0.1",
+    "@typescript-eslint/eslint-plugin": "^5.59.2",
+    "@typescript-eslint/parser": "^5.59.2",
+    "artillery": "^2.0.0-31",
+    "eslint": "^8.40.0",
+    "jest": "^29.5.0",
+    "node-pg-migrate": "^6.2.2",
+    "ts-jest": "^29.1.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.4"
+  },
+  "author": "Udit Garg"
+}

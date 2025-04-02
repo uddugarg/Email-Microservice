@@ -1,0 +1,55 @@
+graph TD
+    subgraph Frontend
+        UI[Web UI]
+    end
+    
+    subgraph API Gateway
+        API[REST API]
+    end
+    
+    subgraph "Queue System"
+        QA[Queue Adapter]
+        Q[(Message Queue)]
+    end
+    
+    subgraph "Email Microservice"
+        EP[Email Processor]
+        QS[Quota Service]
+        EV[Email Validator]
+        UR[User Repository]
+        EPA[Email Provider Adapter]
+        LS[Logging Service]
+    end
+    
+    subgraph "Data Storage"
+        DB[(Database)]
+    end
+    
+    subgraph "Email Providers"
+        Gmail[Gmail API]
+        Outlook[Outlook API]
+        SMTP[SMTP Server]
+    end
+    
+    UI -- "HTTP/REST" --> API
+    API -- "OAuth Flow" --> Gmail
+    API -- "OAuth Flow" --> Outlook
+    API -- "Store Credentials" --> DB
+    API -- "Publish SendEmail Event" --> Q
+    
+    EP -- "Consume Events" --> Q
+    EP -- "Check Quota" --> QS
+    EP -- "Validate Email" --> EV
+    EP -- "Resolve Email" --> UR
+    EP -- "Send Email" --> EPA
+    EP -- "Log Activity" --> LS
+    
+    QS -- "Read/Update Quotas" --> DB
+    UR -- "Read User Data" --> DB
+    LS -- "Write Logs" --> DB
+    
+    EPA -- "Send via Gmail" --> Gmail
+    EPA -- "Send via Outlook" --> Outlook
+    EPA -- "Send via SMTP" --> SMTP
+    
+    QA -- "Queue Operations" --> Q
