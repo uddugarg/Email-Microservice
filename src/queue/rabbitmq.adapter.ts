@@ -1,104 +1,203 @@
-// import * as amqp from 'amqplib';
-// import { QueueAdapter } from './queue.interface';
-// import { logger } from '../utils/logger';
+import { connect, Connection, Channel, ConsumeMessage, Options } from 'amqplib';
+import { QueueAdapter } from './queue.interface';
+import { logger } from '../utils/logger';
 
-// export class RabbitMQAdapter implements QueueAdapter {
-//     private connection!: amqp.Connection;
-//     private channel!: amqp.Channel;
-//     private url: string;
+interface RabbitMQConfig {
+    url: string;
+    exchanges?: {
+        name: string;
+        type: string;
+        options?: Options.AssertExchange;
+    }[];
+    queues?: {
+        name: string;
+        options?: Options.AssertQueue;
+        bindings?: {
+            exchange: string;
+            routingKey: string;
+        }[];
+    }[];
+    prefetch?: number;
+}
 
-//     constructor(url: string) {
-//         this.url = url;
-//     }
+export class RabbitMQAdapter implements QueueAdapter {
+    private connection?: Connection;
+    private channel?: Channel;
+    private url: string;
+    private isInitialized: boolean = false;
 
-//     async initialize(): Promise<void> {
-//         try {
-//             this.connection = await amqp.connect(this.url);
-//             this.channel = await (this.connection as amqp.Connection).createChannel();
+    constructor(url: string) {
+        this.url = url;
+    }
 
-//             await this.channel.assertExchange('emails', 'topic', { durable: true });
+    async initialize(): Promise<void> {
+        if (this.isInitialized) {
+            return;
+        }
 
-//             await this.channel.assertQueue('send-email', {
-//                 durable: true,
-//                 arguments: {
-//                     'x-dead-letter-exchange': 'emails',
-//                     'x-dead-letter-routing-key': 'dead-letter'
-//                 }
-//             });
+        try {
+            // Establish connection
+            this.connection = await connect(this.url) as unknown as Connection;
 
-//             await this.channel.assertQueue('send-email-delay', {
-//                 durable: true,
-//                 arguments: {
-//                     'x-dead-letter-exchange': 'emails',
-//                     'x-dead-letter-routing-key': 'send-email',
-//                     'x-message-ttl': 60000
-//                 }
-//             });
+            // Create channel
+            this.channel = await (this.connection as any).createChannel();
 
-//             await this.channel.assertQueue('dead-letter', { durable: true });
+            // Set up exchanges and queues
+            await this.setupExchangesAndQueues();
 
-//             await this.channel.bindQueue('send-email', 'emails', 'send-email');
-//             await this.channel.bindQueue('send-email-delay', 'emails', 'send-email-delay');
-//             await this.channel.bindQueue('dead-letter', 'emails', 'dead-letter');
+            this.isInitialized = true;
+            logger.info('RabbitMQ adapter initialized');
+        } catch (error) {
+            logger.error('Failed to initialize RabbitMQ adapter:', error);
+            this.isInitialized = false;
+            throw error;
+        }
+    }
 
-//             logger.info('RabbitMQ adapter initialized');
-//         } catch (error) {
-//             logger.error('Failed to initialize RabbitMQ adapter:', error);
-//             throw error;
-//         }
-//     }
+    private async setupExchangesAndQueues(): Promise<void> {
+        if (!this.channel) {
+            throw new Error('Channel not created');
+        }
 
-//     async publish(topic: string, message: any): Promise<void> {
-//         await this.channel.publish(
-//             'emails',
-//             topic,
-//             Buffer.from(JSON.stringify(message)),
-//             { persistent: true }
-//         );
-//     }
+        // Set up exchanges and queues
+        await this.channel.assertExchange('emails', 'topic', { durable: true });
 
-//     subscribe(topic: string, handler: (message: any) => Promise<void>): void {
-//         this.channel.consume(topic, async (msg) => {
-//             if (!msg) return;
+        // Create main queue
+        await this.channel.assertQueue('send-email', {
+            durable: true,
+            arguments: {
+                'x-dead-letter-exchange': 'emails',
+                'x-dead-letter-routing-key': 'dead-letter'
+            }
+        });
 
-//             try {
-//                 const content = JSON.parse(msg.content.toString());
-//                 content._originalMessage = msg;
-//                 await handler(content);
-//             } catch (error) {
-//                 logger.error('Error processing message:', error);
-//                 this.channel.nack(msg, false, false);
-//             }
-//         });
-//     }
+        // Create delay queue for retries
+        await this.channel.assertQueue('send-email-delay', {
+            durable: true,
+            arguments: {
+                'x-dead-letter-exchange': 'emails',
+                'x-dead-letter-routing-key': 'send-email',
+                'x-message-ttl': 60000 // Default delay 1 minute
+            }
+        });
 
-//     async ack(message: any): Promise<void> {
-//         this.channel.ack(message._originalMessage);
-//     }
+        // Dead letter queue
+        await this.channel.assertQueue('dead-letter', { durable: true });
 
-//     async nack(message: any, requeue: boolean, delay?: number): Promise<void> {
-//         if (delay && delay > 0) {
-//             const updatedMessage = { ...message };
-//             delete updatedMessage._originalMessage;
+        // Bind queues to exchange
+        await this.channel.bindQueue('send-email', 'emails', 'send-email');
+        await this.channel.bindQueue('send-email-delay', 'emails', 'send-email-delay');
+        await this.channel.bindQueue('dead-letter', 'emails', 'dead-letter');
+    }
 
-//             await this.channel.publish(
-//                 'emails',
-//                 'send-email-delay',
-//                 Buffer.from(JSON.stringify(updatedMessage)),
-//                 {
-//                     persistent: true,
-//                     expiration: delay.toString()
-//                 }
-//             );
+    private ensureInitialized(): void {
+        if (!this.isInitialized || !this.channel) {
+            throw new Error('RabbitMQ adapter not initialized. Call initialize() first.');
+        }
+    }
 
-//             this.channel.ack(message._originalMessage);
-//         } else {
-//             this.channel.nack(message._originalMessage, false, requeue);
-//         }
-//     }
+    async publish(topic: string, message: any): Promise<void> {
+        this.ensureInitialized();
 
-//     async close(): Promise<void> {
-//         await (this.channel as amqp.Channel).close();
-//         await (this.connection as amqp.Connection).close();
-//     }
-// }
+        try {
+            this.channel!.publish(
+                'emails',
+                topic,
+                Buffer.from(JSON.stringify(message)),
+                { persistent: true }
+            );
+        } catch (error) {
+            logger.error('Error publishing message:', error);
+            throw error;
+        }
+    }
+
+    subscribe(topic: string, handler: (message: any) => Promise<void>): () => void {
+        this.ensureInitialized();
+
+        const consumer = async (msg: ConsumeMessage | null) => {
+            if (!msg) return;
+
+            try {
+                const content = JSON.parse(msg.content.toString());
+                // Store the original message for ack/nack
+                content._originalMessage = msg;
+
+                await handler(content);
+
+                // Acknowledge message
+                this.channel!.ack(msg);
+            } catch (error) {
+                logger.error('Error processing message:', error);
+
+                // Negative acknowledge
+                this.channel!.nack(msg, false, false);
+            }
+        };
+
+        // Consume messages
+        const consumerTag = this.channel!.consume(topic, consumer);
+
+        // Return a function to cancel consumption
+        return async () => {
+            if (consumerTag) {
+                this.channel!.cancel((await consumerTag).consumerTag);
+            }
+        };
+    }
+
+    async ack(message: any): Promise<void> {
+        this.ensureInitialized();
+        this.channel!.ack(message._originalMessage);
+    }
+
+    async nack(message: any, requeue: boolean, delay?: number): Promise<void> {
+        this.ensureInitialized();
+
+        // If delay provided, publish to delay queue with custom TTL
+        if (delay && delay > 0) {
+            const updatedMessage = { ...message };
+            delete updatedMessage._originalMessage;
+
+            this.channel!.publish(
+                'emails',
+                'send-email-delay',
+                Buffer.from(JSON.stringify(updatedMessage)),
+                {
+                    persistent: true,
+                    expiration: delay.toString()
+                }
+            );
+
+            // Ack the original to remove it from the queue
+            this.channel!.ack(message._originalMessage);
+        } else {
+            // Standard nack without delay
+            this.channel!.nack(message._originalMessage, false, requeue);
+        }
+    }
+
+    async close(): Promise<void> {
+        try {
+            // Ensure channel and connection are closed safely
+            if (this.channel) {
+                await this.channel.close();
+                this.channel = undefined;
+            }
+            if (this.connection) {
+                await (this.connection as any).close();
+                this.connection = undefined;
+            }
+            this.isInitialized = false;
+        } catch (error) {
+            logger.error('Error closing RabbitMQ connection:', error);
+        }
+    }
+}
+
+// Example of how to use the adapter
+export async function initializeRabbitMQ(url: string): Promise<RabbitMQAdapter> {
+    const adapter = new RabbitMQAdapter(url);
+    await adapter.initialize();
+    return adapter;
+}
